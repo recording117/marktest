@@ -161,26 +161,26 @@ const Setup = () => {
           先にフォルダを選択してからアップロードしてください。
         </p>
         
-        <div style={{ display: 'flex', gap: '2rem' }}>
-          <div style={{ flex: 1, border: '2px dashed var(--border)', padding: '2rem', textAlign: 'center', borderRadius: 'var(--radius-md)' }}>
+        <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '250px', border: '2px dashed var(--border)', padding: '2rem', textAlign: 'center', borderRadius: 'var(--radius-md)' }}>
             <Upload size={32} style={{ color: 'var(--primary)', marginBottom: '1rem' }} />
             <h4>模範解答 PDF</h4>
             <input 
               type="file" 
               accept=".pdf" 
               onChange={(e) => e.target.files && handleFileUpload(e.target.files[0], true)}
-              style={{ marginTop: '1rem' }}
+              style={{ marginTop: '1rem', maxWidth: '100%' }}
             />
           </div>
 
-          <div style={{ flex: 1, border: '2px dashed var(--border)', padding: '2rem', textAlign: 'center', borderRadius: 'var(--radius-md)' }}>
+          <div style={{ flex: 1, minWidth: '250px', border: '2px dashed var(--border)', padding: '2rem', textAlign: 'center', borderRadius: 'var(--radius-md)' }}>
             <Upload size={32} style={{ color: 'var(--primary)', marginBottom: '1rem' }} />
             <h4>解答用紙 PDF</h4>
             <input 
               type="file" 
               accept=".pdf" 
               onChange={(e) => e.target.files && handleFileUpload(e.target.files[0], false)}
-              style={{ marginTop: '1rem' }}
+              style={{ marginTop: '1rem', maxWidth: '100%' }}
             />
           </div>
         </div>
