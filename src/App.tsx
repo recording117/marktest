@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { AppProvider } from './store/AppContext';
 import { LayoutDashboard, Settings, Image as ImageIcon, Crop, FileCheck2, FileDown, Menu } from 'lucide-react';
 import './index.css';
