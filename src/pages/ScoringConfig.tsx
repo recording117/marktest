@@ -108,7 +108,8 @@ const ScoringConfig = () => {
           
           if (state.settings.geminiApiKey) {
             const genAI = new GoogleGenerativeAI(state.settings.geminiApiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const modelName = state.settings.geminiModelName || 'gemini-1.5-flash';
+            const model = genAI.getGenerativeModel({ model: modelName });
             const imagePart = await fileToGenerativePart(file);
             const prompt = "この画像の解答を読み取ってください。問題番号（例: (1)など）や単位（cm, gなど）はすべて除外し、解答となる文字・数字だけを出力してください。余計な説明は含めないでください。";
             const result = await model.generateContent([prompt, imagePart]);
@@ -123,8 +124,9 @@ const ScoringConfig = () => {
             newQuestions[qIndex] = { ...newQuestions[qIndex], expectedAnswer: templateText };
           }
           addLog(`模範解答 (${q.number}): ${templateText}`);
-        } catch (e) {
-          addLog(`警告: 問題 ${q.number} の模範解答が見つからないか読み込めません。`);
+        } catch (e: any) {
+          console.error(e);
+          addLog(`警告: 問題 ${q.number} の読み込みに失敗しました。詳細: ${e?.message || String(e)}`);
         }
       }
 
@@ -213,7 +215,8 @@ const ScoringConfig = () => {
 
             if (state.settings.geminiApiKey) {
               const genAI = new GoogleGenerativeAI(state.settings.geminiApiKey);
-              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+              const modelName = state.settings.geminiModelName || 'gemini-1.5-flash';
+              const model = genAI.getGenerativeModel({ model: modelName });
               const imagePart = await fileToGenerativePart(file);
               const prompt = "この画像の解答を読み取ってください。問題番号（例: (1)など）や単位（cm, gなど）はすべて除外し、解答となる文字・数字だけを出力してください。読めない場合や空欄の場合は出力なし（空文字）にしてください。余計な説明は含めないでください。";
               const result = await model.generateContent([prompt, imagePart]);
@@ -240,8 +243,9 @@ const ScoringConfig = () => {
               ocrText: studentText,
               isOcrVerified: false // Flag for human to verify
             };
-          } catch (e) {
+          } catch (e: any) {
             console.error(`Error processing ${name}`, e);
+            addLog(`エラー: ${name} の処理に失敗。詳細: ${e?.message || String(e)}`);
           }
         }
         addLog(`問題 ${q.number} のOCR完了`);
@@ -270,16 +274,29 @@ const ScoringConfig = () => {
         <p style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
           手書き文字や単位・問題番号の除去を高精度で行うために、Gemini APIを使用できます。APIキーを設定すると、自動採点時に優先して使用されます。
         </p>
-        <input 
-          type="password"
-          value={state.settings.geminiApiKey || ''}
-          onChange={(e) => saveState({ ...state, settings: { ...state.settings, geminiApiKey: e.target.value } })}
-          placeholder="AIzaSy..."
-          style={{ width: '100%', maxWidth: '400px' }}
-        />
-        <p style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
-          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI StudioでAPIキーを取得（無料）</a>
-        </p>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.2rem' }}>APIキー</label>
+          <input 
+            type="password"
+            value={state.settings.geminiApiKey || ''}
+            onChange={(e) => saveState({ ...state, settings: { ...state.settings, geminiApiKey: e.target.value } })}
+            placeholder="AIzaSy..."
+            style={{ width: '100%', maxWidth: '400px' }}
+          />
+          <p style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI StudioでAPIキーを取得（無料）</a>
+          </p>
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.2rem' }}>モデル名 (404エラーが出る場合は変更してください)</label>
+          <input 
+            type="text"
+            value={state.settings.geminiModelName || 'gemini-1.5-flash'}
+            onChange={(e) => saveState({ ...state, settings: { ...state.settings, geminiModelName: e.target.value } })}
+            placeholder="gemini-1.5-flash"
+            style={{ width: '100%', maxWidth: '400px' }}
+          />
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: '2rem' }}>
