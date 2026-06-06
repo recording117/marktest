@@ -32,7 +32,7 @@ const ScoringConfig = () => {
             return {
               id,
               number: id.replace('q', ''),
-              maxPoints: 10,
+              maxPoints: 5,
               allowPartialPoints: false,
               autoGrade: false,
               perspective: 1 as const
@@ -263,6 +263,7 @@ const ScoringConfig = () => {
                       type="text" 
                       value={q.number} 
                       onChange={(e) => handleUpdateQuestion(q.id, { number: e.target.value })}
+                      onFocus={(e) => e.target.select()}
                       style={{ width: '80px' }}
                     />
                   </td>
@@ -271,6 +272,7 @@ const ScoringConfig = () => {
                       type="number" 
                       value={q.maxPoints} 
                       onChange={(e) => handleUpdateQuestion(q.id, { maxPoints: parseInt(e.target.value) || 0 })}
+                      onFocus={(e) => e.target.select()}
                       style={{ width: '80px' }}
                     />
                   </td>

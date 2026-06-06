@@ -8,6 +8,7 @@ const HANDLE_SIZE = 8;
 const Cropping = () => {
   const { state, saveState, dirHandle } = useAppContext();
   const [templateUrl, setTemplateUrl] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   
   const [mode, setMode] = useState<'name' | 'question' | 'aggregate'>('name');
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>(
@@ -40,20 +41,25 @@ const Cropping = () => {
         const imagesDir = await dirHandle.getDirectoryHandle('images');
         let fileHandle;
         try {
-          fileHandle = await imagesDir.getFileHandle('模範解答.jpeg');
+          if ((state.settings.pagesPerStudent || 1) > 1) {
+            fileHandle = await imagesDir.getFileHandle(`模範解答_${currentPage}.jpeg`);
+          } else {
+            fileHandle = await imagesDir.getFileHandle('模範解答.jpeg');
+          }
         } catch {
-          fileHandle = await imagesDir.getFileHandle('模範解答_1.jpeg');
+          fileHandle = await imagesDir.getFileHandle(`模範解答_${currentPage}.jpeg`);
         }
         const file = await fileHandle.getFile();
         const url = URL.createObjectURL(file);
         setTemplateUrl(url);
       } catch (err) {
         console.error("Template image not found.", err);
+        setTemplateUrl(null);
       }
     };
     loadTemplate();
     return () => { if (templateUrl) URL.revokeObjectURL(templateUrl); };
-  }, [dirHandle]);
+  }, [dirHandle, currentPage, state.settings.pagesPerStudent]);
 
   const drawRect = (ctx: CanvasRenderingContext2D, rect: Rect, color: string, label: string, isActive: boolean = false) => {
     const { x, y, width, height } = rect;
@@ -110,31 +116,30 @@ const Cropping = () => {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    if (state.cropSettings.nameRect) {
+    if (state.cropSettings.nameRect && (state.cropSettings.nameRect.page || 1) === currentPage) {
       const isActive = mode === 'name';
       drawRect(ctx, state.cropSettings.nameRect, '#EF4444', 'Name', isActive);
     }
 
     Object.entries(state.cropSettings.questionRects || {}).forEach(([qId, rect]) => {
-      // qIdが空文字などの不正なキーの場合はスキップ
-      if (!qId) return;
+      if (!qId || (rect.page || 1) !== currentPage) return;
       const isActive = mode === 'question' && selectedQuestionId === qId;
       drawRect(ctx, rect, '#3B82F6', `Q: ${qId.replace('q', '')}`, isActive);
     });
 
-    if (state.cropSettings.totalScoreRect) {
+    if (state.cropSettings.totalScoreRect && (state.cropSettings.totalScoreRect.page || 1) === currentPage) {
       const isActive = mode === 'aggregate' && selectedAggregateId === 'total';
       drawRect(ctx, state.cropSettings.totalScoreRect, '#10B981', 'Total', isActive);
     }
 
     Object.entries(state.cropSettings.aspectScoreRects || {}).forEach(([aId, rect]) => {
-      if (!aId) return;
+      if (!aId || (rect.page || 1) !== currentPage) return;
       const isActive = mode === 'aggregate' && selectedAggregateId === `aspect${aId}`;
       drawRect(ctx, rect, '#8B5CF6', `Aspect ${aId}`, isActive);
     });
   };
 
-  useEffect(() => { drawRects(); }, [state.cropSettings, dragState, templateUrl, zoomScale, mode, selectedQuestionId, selectedAggregateId]);
+  useEffect(() => { drawRects(); }, [state.cropSettings, dragState, templateUrl, zoomScale, mode, selectedQuestionId, selectedAggregateId, currentPage]);
 
   useEffect(() => {
     // 過去のバグで空文字('')のキーが保存されてしまっている場合はクリーンアップ
@@ -252,27 +257,28 @@ const Cropping = () => {
   };
 
   const setTargetRect = (rect: Rect, overrideId?: string, overrideMode?: 'name' | 'question' | 'aggregate') => {
+    const r = { ...rect, page: currentPage };
     const m = overrideMode || mode;
     if (m === 'name') {
-      saveState({ ...state, cropSettings: { ...state.cropSettings, nameRect: rect } });
+      saveState({ ...state, cropSettings: { ...state.cropSettings, nameRect: r } });
     } else if (m === 'aggregate') {
       const id = overrideId || selectedAggregateId;
       if (id === 'total') {
-        saveState({ ...state, cropSettings: { ...state.cropSettings, totalScoreRect: rect } });
+        saveState({ ...state, cropSettings: { ...state.cropSettings, totalScoreRect: r } });
       } else {
         const aId = id.replace('aspect', '');
-        saveState({ ...state, cropSettings: { ...state.cropSettings, aspectScoreRects: { ...(state.cropSettings.aspectScoreRects || {}), [aId]: rect } } });
+        saveState({ ...state, cropSettings: { ...state.cropSettings, aspectScoreRects: { ...(state.cropSettings.aspectScoreRects || {}), [aId]: r } } });
       }
     } else {
       const id = overrideId || selectedQuestionId;
       if (!id) return; // 空のIDは保存しない
-      saveState({ ...state, cropSettings: { ...state.cropSettings, questionRects: { ...state.cropSettings.questionRects, [id]: rect } } });
+      saveState({ ...state, cropSettings: { ...state.cropSettings, questionRects: { ...state.cropSettings.questionRects, [id]: r } } });
     }
   };
 
   const hitTestGlobal = (x: number, y: number) => {
     const checkRect = (rect: Rect | null) => {
-      if (!rect) return null;
+      if (!rect || (rect.page || 1) !== currentPage) return null;
       const hs = HANDLE_SIZE;
       const { x: rx, y: ry, width: rw, height: rh } = rect;
       
@@ -558,6 +564,18 @@ const Cropping = () => {
 
         const isTemplate = name.includes('模範解答');
         const baseName = name.replace('.jpeg', '');
+        
+        let pageNum = 1;
+        let studentStr = baseName;
+        if ((state.settings.pagesPerStudent || 1) > 1) {
+          const parts = baseName.split('_');
+          const lastPart = parts[parts.length - 1];
+          if (!isNaN(parseInt(lastPart))) {
+            pageNum = parseInt(lastPart);
+            parts.pop();
+            studentStr = parts.join('_');
+          }
+        }
 
         const cropAndSave = async (rect: Rect, saveDir: FileSystemDirectoryHandle, saveName: string) => {
           if (!ctx) return;
@@ -573,13 +591,14 @@ const Cropping = () => {
           }
         };
 
-        if (!isTemplate && state.cropSettings.nameRect) {
-          await cropAndSave(state.cropSettings.nameRect, nameDir, `${baseName}_name.jpeg`);
+        if (!isTemplate && state.cropSettings.nameRect && (state.cropSettings.nameRect.page || 1) === pageNum) {
+          await cropAndSave(state.cropSettings.nameRect, nameDir, `${studentStr}_name.jpeg`);
         }
 
         for (const [qId, rect] of Object.entries(state.cropSettings.questionRects)) {
+          if ((rect.page || 1) !== pageNum) continue;
           const qDir = await trimmedDir.getDirectoryHandle(qId);
-          const saveName = isTemplate ? `模範解答_${qId.replace('q', '')}.jpeg` : `${baseName}_${qId.replace('q', '')}.jpeg`;
+          const saveName = isTemplate ? `模範解答_${qId.replace('q', '')}.jpeg` : `${studentStr}_${qId.replace('q', '')}.jpeg`;
           await cropAndSave(rect, qDir, saveName);
         }
 
@@ -658,6 +677,27 @@ const Cropping = () => {
           <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '2rem' }}>
             右側の画像上をクリックすると自動で枠を認識します。枠の端をドラッグしてサイズ調整が可能です。名前欄を設定すると、自動的に問題001へ進みます。
           </p>
+
+          {(state.settings.pagesPerStudent || 1) > 1 && (
+            <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ fontWeight: 'bold' }}>ページ:</span>
+              {Array.from({ length: state.settings.pagesPerStudent || 1 }, (_, i) => i + 1).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setCurrentPage(p)}
+                  style={{
+                    padding: '0.2rem 0.6rem',
+                    backgroundColor: currentPage === p ? 'var(--primary)' : 'var(--background)',
+                    color: currentPage === p ? 'white' : 'var(--text)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)'
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          )}
 
           <button 
             onClick={handleCropExecution} 

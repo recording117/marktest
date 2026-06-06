@@ -79,7 +79,7 @@ const Setup = () => {
       // Also save some test questions if they don't exist
       if (state.questions.length === 0) {
         const newQuestions = [
-          { id: 'q001', number: '001', maxPoints: 10, allowPartialPoints: false, autoGrade: false, perspective: 1 as const }
+          { id: 'q001', number: '001', maxPoints: 5, allowPartialPoints: false, autoGrade: false, perspective: 1 as const }
         ];
         await saveState({ ...state, questions: newQuestions });
         await trimmedHandle.getDirectoryHandle('q001', { create: true });
@@ -120,6 +120,18 @@ const Setup = () => {
       ...state,
       settings: { ...state.settings, absentNumbers: nums }
     });
+  };
+
+  const [pagesInput, setPagesInput] = useState((state.settings.pagesPerStudent || 1).toString());
+
+  const handlePagesBlur = () => {
+    const p = parseInt(pagesInput);
+    if (!isNaN(p) && p > 0) {
+      saveState({ ...state, settings: { ...state.settings, pagesPerStudent: p } });
+      setPagesInput(p.toString());
+    } else {
+      setPagesInput((state.settings.pagesPerStudent || 1).toString());
+    }
   };
 
   // Upload PDFs to idb-keyval directly
@@ -165,6 +177,7 @@ const Setup = () => {
               value={formatInput} 
               onChange={(e) => setFormatInput(e.target.value)} 
               onBlur={handleFormatBlur}
+              onFocus={(e) => e.target.select()}
               placeholder="例: 1-40, 3101-3126"
               style={{ width: '100%' }}
             />
@@ -176,7 +189,20 @@ const Setup = () => {
               value={absentInput} 
               onChange={(e) => setAbsentInput(e.target.value)} 
               onBlur={handleAbsentBlur}
+              onFocus={(e) => e.target.select()}
               placeholder="例: 3, 12, 25"
+              style={{ width: '100%' }}
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: '150px' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>1人あたりのページ数</label>
+            <input 
+              type="number" 
+              value={pagesInput} 
+              onChange={(e) => setPagesInput(e.target.value)} 
+              onBlur={handlePagesBlur}
+              onFocus={(e) => e.target.select()}
+              min="1"
               style={{ width: '100%' }}
             />
           </div>

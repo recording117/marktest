@@ -3,6 +3,7 @@ export interface AppSettings {
   startNumber: number;
   endNumber: number;
   absentNumbers: number[];
+  pagesPerStudent?: number;
 }
 
 export interface QuestionSetting {
@@ -20,6 +21,7 @@ export interface Rect {
   y: number;
   width: number;
   height: number;
+  page?: number;
 }
 
 export interface CropSettings {

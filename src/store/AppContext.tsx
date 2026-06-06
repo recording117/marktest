@@ -11,7 +11,7 @@ interface AppContextType {
 }
 
 const defaultState: ProjectState = {
-  settings: { startNumber: 1, endNumber: 40, absentNumbers: [] },
+  settings: { startNumber: 1, endNumber: 40, absentNumbers: [], pagesPerStudent: 1 },
   questions: [],
   cropSettings: { nameRect: null, questionRects: {}, totalScoreRect: null, aspectScoreRects: {} },
   studentScores: [],

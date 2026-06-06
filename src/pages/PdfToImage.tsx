@@ -34,8 +34,11 @@ const PdfToImage = () => {
         state.settings.absentNumbers
       );
 
-      if (!isTemplate && numPages !== validStudentNumbers.length) {
-        if (!window.confirm(`警告: 解答用紙PDFのページ数 (${numPages}) と設定された出席者の数 (${validStudentNumbers.length}) が一致しません。\n\nこのまま変換を続行しますか？`)) {
+      const pagesPerStudent = state.settings.pagesPerStudent || 1;
+      const expectedPages = validStudentNumbers.length * pagesPerStudent;
+
+      if (!isTemplate && numPages !== expectedPages) {
+        if (!window.confirm(`警告: 解答用紙PDFのページ数 (${numPages}) と設定された出席者の想定ページ数 (${expectedPages}) が一致しません。\n\nこのまま変換を続行しますか？`)) {
           throw new Error('ユーザーによってキャンセルされました。');
         }
       }
@@ -50,13 +53,14 @@ const PdfToImage = () => {
 
         let fileName = '';
         if (isTemplate) {
-          fileName = `模範解答${numPages > 1 ? `_${i + 1}` : ''}.jpeg`;
+          fileName = `模範解答${pagesPerStudent > 1 ? `_${i + 1}` : ''}.jpeg`;
         } else {
-          // 生徒の答案は1人1ページを想定（欠席者番号をスキップ）
-          const studentNum = i < validStudentNumbers.length 
-            ? validStudentNumbers[i] 
-            : (validStudentNumbers.length > 0 ? validStudentNumbers[validStudentNumbers.length - 1] + (i - validStudentNumbers.length + 1) : i + 1);
-          fileName = `${studentNum}.jpeg`;
+          const studentIndex = Math.floor(i / pagesPerStudent);
+          const pageIndex = (i % pagesPerStudent) + 1;
+          const studentNum = studentIndex < validStudentNumbers.length 
+            ? validStudentNumbers[studentIndex] 
+            : (validStudentNumbers.length > 0 ? validStudentNumbers[validStudentNumbers.length - 1] + (studentIndex - validStudentNumbers.length + 1) : studentIndex + 1);
+          fileName = pagesPerStudent > 1 ? `${studentNum}_${pageIndex}.jpeg` : `${studentNum}.jpeg`;
         }
 
         const imgFileHandle = await imagesDir.getFileHandle(fileName, { create: true });
