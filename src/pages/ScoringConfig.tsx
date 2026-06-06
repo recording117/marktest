@@ -16,6 +16,25 @@ async function fileToGenerativePart(file: File) {
   };
 }
 
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const executeWithRetry = async (fn: () => Promise<any>, maxRetries = 3) => {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (e: any) {
+      const isRateLimit = e.status === 429 || (e.message && e.message.includes('429')) || (e.message && e.message.includes('Quota exceeded'));
+      if (isRateLimit && i < maxRetries - 1) {
+        const waitTime = (i + 1) * 20000; // 20秒, 40秒 待機
+        console.warn(`Rate limit exceeded, retrying in ${waitTime/1000}s...`);
+        await wait(waitTime);
+        continue;
+      }
+      throw e;
+    }
+  }
+};
+
 const ScoringConfig = () => {
   const { state, saveState, dirHandle } = useAppContext();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -112,8 +131,13 @@ const ScoringConfig = () => {
             const model = genAI.getGenerativeModel({ model: modelName });
             const imagePart = await fileToGenerativePart(file);
             const prompt = "この画像の解答を読み取ってください。問題番号（例: (1)など）や単位（cm, gなど）はすべて除外し、解答となる文字・数字だけを出力してください。余計な説明は含めないでください。";
-            const result = await model.generateContent([prompt, imagePart]);
+            
+            // レートリミット対策としてリトライ付きで実行
+            const result = await executeWithRetry(() => model.generateContent([prompt, imagePart]));
             templateText = result.response.text().trim().replace(/\s+/g, '');
+            
+            // 連続リクエストを防ぐため数秒待機
+            await wait(2000);
           } else {
             const result = await Tesseract.recognize(file, 'eng+jpn');
             templateText = result.data.text.trim().replace(/\s+/g, '');
@@ -219,8 +243,12 @@ const ScoringConfig = () => {
               const model = genAI.getGenerativeModel({ model: modelName });
               const imagePart = await fileToGenerativePart(file);
               const prompt = "この画像の解答を読み取ってください。問題番号（例: (1)など）や単位（cm, gなど）はすべて除外し、解答となる文字・数字だけを出力してください。読めない場合や空欄の場合は出力なし（空文字）にしてください。余計な説明は含めないでください。";
-              const result = await model.generateContent([prompt, imagePart]);
+              
+              const result = await executeWithRetry(() => model.generateContent([prompt, imagePart]));
               studentText = result.response.text().trim().replace(/\s+/g, '');
+              
+              // 連続リクエストを防ぐため少し待機
+              await wait(3000);
             } else {
               let result;
               if (whitelist) {
