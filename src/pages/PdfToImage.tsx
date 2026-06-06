@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAppContext } from '../store/AppContext';
 import { Play } from 'lucide-react';
 import { parseStudentNumbers } from '../utils/studentNumbers';
+import { get } from 'idb-keyval';
 
 const PdfToImage = () => {
   const { state, dirHandle } = useAppContext();
@@ -12,13 +13,12 @@ const PdfToImage = () => {
     setLog(prev => [...prev, message]);
   };
 
-  const processPdf = async (fileHandle: FileSystemFileHandle, isTemplate: boolean) => {
+  const processPdf = async (file: File, isTemplate: boolean) => {
     try {
       // 動的インポートにより、アプリ起動時のトップレベルawaitブロックを回避
       const mupdfModule = await import('mupdf');
       const mupdf = mupdfModule.default || mupdfModule;
 
-      const file = await fileHandle.getFile();
       const arrayBuffer = await file.arrayBuffer();
       const doc = mupdf.Document.openDocument(arrayBuffer, "application/pdf");
       const numPages = doc.countPages();
@@ -67,7 +67,7 @@ const PdfToImage = () => {
       }
     } catch (err: any) {
       console.error(err);
-      addLog(`エラー: ${fileHandle.name} の処理に失敗しました: ${err.message || String(err)}`);
+      addLog(`エラー: ${file.name} の処理に失敗しました: ${err.message || String(err)}`);
     }
   };
 
@@ -81,28 +81,20 @@ const PdfToImage = () => {
     setLog(['変換処理を開始します...']);
 
     try {
-      // Find PDFs
-      let templateHandle: FileSystemFileHandle | null = null;
-      let answerHandle: FileSystemFileHandle | null = null;
+      // Find PDFs from idb-keyval
+      const templateFile = await get<File>('templatePdf');
+      const answerFile = await get<File>('answerPdf');
 
-      for await (const [name, handle] of (dirHandle as any).entries()) {
-        if (name === '模範解答.pdf' && handle.kind === 'file') {
-          templateHandle = handle;
-        } else if (name === '解答用紙.pdf' && handle.kind === 'file') {
-          answerHandle = handle;
-        }
+      if (templateFile) {
+        await processPdf(templateFile, true);
+      } else {
+        addLog('模範解答PDFが登録されていません。');
       }
 
-      if (templateHandle) {
-        await processPdf(templateHandle, true);
+      if (answerFile) {
+        await processPdf(answerFile, false);
       } else {
-        addLog('模範解答.pdf が見つかりません。');
-      }
-
-      if (answerHandle) {
-        await processPdf(answerHandle, false);
-      } else {
-        addLog('解答用紙.pdf が見つかりません。');
+        addLog('解答用紙PDFが登録されていません。');
       }
 
       addLog('すべての変換が完了しました。');

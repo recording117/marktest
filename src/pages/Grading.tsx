@@ -156,7 +156,7 @@ const Grading = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (focusedStudent === null || !selectedQuestion) return;
       
-      if (['1', '2', '3', 'ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+      if (['1', '2', '3', 'ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'a', 'x', 'A', 'X'].includes(e.key)) {
         e.preventDefault();
       }
 
@@ -187,6 +187,14 @@ const Grading = () => {
         case 'ArrowLeft':
         case 'ArrowUp':
           moveToPrevStudent();
+          break;
+        case 'a':
+        case 'A':
+          handleBulkCorrect();
+          break;
+        case 'x':
+        case 'X':
+          handleBulkIncorrect();
           break;
         case 'Enter': {
           e.preventDefault();
@@ -226,12 +234,11 @@ const Grading = () => {
     const num = currentNum !== undefined ? currentNum : focusedStudent;
     if (num === null) return;
     const idx = filteredStudentsList.indexOf(num);
-    if (idx !== -1 && idx < filteredStudentsList.length - 1) {
-      const nextId = filteredStudentsList[idx + 1];
+    if (idx !== -1) {
+      const nextIdx = (idx + 1) % filteredStudentsList.length;
+      const nextId = filteredStudentsList[nextIdx];
       setFocusedStudent(nextId);
       document.getElementById(`student-card-${nextId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } else {
-      setFocusedStudent(null);
     }
   };
 
@@ -247,6 +254,30 @@ const Grading = () => {
   };
 
 
+
+  const handleBulkCorrect = () => {
+    if (!selectedQuestion) return;
+    
+    const newStudentScores = [...state.studentScores];
+    const students = Object.keys(studentImages).map(Number);
+    
+    students.forEach(studentNum => {
+      let sc = newStudentScores.find(s => s.studentNumber === studentNum);
+      if (!sc) {
+        sc = { studentNumber: studentNum, scores: {} };
+        newStudentScores.push(sc);
+      }
+      if (!sc.scores[selectedQuestion.id] || sc.scores[selectedQuestion.id].status === 'unassigned') {
+        sc.scores[selectedQuestion.id] = {
+          status: 'correct',
+          points: selectedQuestion.maxPoints,
+          isOcrVerified: true
+        };
+      }
+    });
+    
+    saveState({ ...state, studentScores: newStudentScores });
+  };
 
   const handleBulkIncorrect = () => {
     if (!selectedQuestion) return;
@@ -392,6 +423,9 @@ const Grading = () => {
               <option key={q.id} value={q.id}>問題 {q.number} (配点: {q.maxPoints})</option>
             ))}
           </select>
+          <button onClick={handleBulkCorrect} style={{ backgroundColor: '#10B981', color: 'white' }}>
+            未入力を全て正解
+          </button>
           <button onClick={handleBulkIncorrect} style={{ backgroundColor: 'var(--text-muted)' }}>
             未入力を全て不正解
           </button>
@@ -466,6 +500,8 @@ const Grading = () => {
           <div><kbd>1</kbd> 正解</div>
           <div><kbd>2</kbd> 不正解</div>
           {selectedQuestion.allowPartialPoints && <div><kbd>3</kbd> 部分点</div>}
+          <div style={{ marginLeft: '1rem' }}><kbd>a</kbd> 未入力を全て正解</div>
+          <div><kbd>x</kbd> 未入力を全て不正解</div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginLeft: 'auto' }}>※画像をクリックしてフォーカスしてから操作してください</div>
         </div>
         

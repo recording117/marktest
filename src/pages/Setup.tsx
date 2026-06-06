@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAppContext } from '../store/AppContext';
 import { FolderOpen, Upload, CheckCircle2 } from 'lucide-react';
+import { set } from 'idb-keyval';
 
 const Setup = () => {
   const { state, saveState, dirHandle, setDirHandle } = useAppContext();
@@ -14,6 +15,24 @@ const Setup = () => {
       });
       setDirHandle(dirHandle);
       
+      // Check for project_state.json first
+      let loadedState = null;
+      try {
+        const stateHandle = await dirHandle.getFileHandle('project_state.json');
+        const file = await stateHandle.getFile();
+        const text = await file.text();
+        loadedState = JSON.parse(text);
+      } catch (e) {}
+
+      if (loadedState) {
+        const confirmRestore = window.confirm("以前のプロジェクトデータ（設定や採点結果）が見つかりました。復元して続きから開始しますか？\n（キャンセルを押すと、状態をクリアして最初から開始します）");
+        if (confirmRestore) {
+          await saveState(loadedState);
+          setStatus('以前のデータを復元しました。');
+          return;
+        }
+      }
+
       let hasData = false;
       try {
         await dirHandle.getDirectoryHandle('images');
@@ -32,7 +51,22 @@ const Setup = () => {
           setStatus('既存のデータを消去中...');
           try { await dirHandle.removeEntry('images', { recursive: true }); } catch (e) {}
           try { await dirHandle.removeEntry('trimmed', { recursive: true }); } catch (e) {}
+          // Clear app state as requested
+          await saveState({
+            settings: state.settings,
+            questions: [],
+            cropSettings: { nameRect: null, questionRects: {}, totalScoreRect: null, aspectScoreRects: {} },
+            studentScores: []
+          });
         }
+      } else {
+        // New folder, also clear state to be safe
+        await saveState({
+          settings: state.settings,
+          questions: [],
+          cropSettings: { nameRect: null, questionRects: {}, totalScoreRect: null, aspectScoreRects: {} },
+          studentScores: []
+        });
       }
 
       setStatus('初期化中...');
@@ -88,19 +122,13 @@ const Setup = () => {
     });
   };
 
-  // Upload PDFs to the dirHandle directly
+  // Upload PDFs to idb-keyval directly
   const handleFileUpload = async (file: File, isTemplate: boolean) => {
-    if (!dirHandle) {
-      alert('先に保存先フォルダを選択してください。');
-      return;
-    }
     try {
+      const key = isTemplate ? 'templatePdf' : 'answerPdf';
+      await set(key, file);
       const fileName = isTemplate ? '模範解答.pdf' : '解答用紙.pdf';
-      const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-      const writable = await (fileHandle as any).createWritable();
-      await writable.write(file);
-      await writable.close();
-      setStatus(`${fileName} を保存しました。`);
+      setStatus(`${fileName} を登録しました。`);
     } catch (err) {
       console.error(err);
       setStatus(`ファイル保存エラー: ${err}`);
@@ -158,7 +186,7 @@ const Setup = () => {
       <div className="card">
         <h3>PDFファイルの登録</h3>
         <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
-          先にフォルダを選択してからアップロードしてください。
+          システム内に保存されます。（作業フォルダには出力されません）
         </p>
         
         <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>

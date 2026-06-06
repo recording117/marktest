@@ -44,6 +44,16 @@ export const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const saveState = async (newState: ProjectState) => {
     setState(newState);
     await set('appState', newState);
+    if (dirHandle) {
+      try {
+        const fileHandle = await dirHandle.getFileHandle('project_state.json', { create: true });
+        const writable = await (fileHandle as any).createWritable();
+        await writable.write(JSON.stringify(newState));
+        await writable.close();
+      } catch (err) {
+        console.error('Failed to save to project folder:', err);
+      }
+    }
   };
 
   if (!isLoaded) return <div>Loading state...</div>;

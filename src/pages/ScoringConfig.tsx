@@ -234,6 +234,12 @@ const ScoringConfig = () => {
       <div className="card" style={{ marginBottom: '2rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <h3>問題一覧と設定</h3>
+          <div style={{ display: 'flex', gap: '1.5rem', fontWeight: 'bold', backgroundColor: 'var(--background)', padding: '0.5rem 1rem', borderRadius: 'var(--radius-md)' }}>
+            <span style={{ color: 'var(--primary)' }}>総合計: {state.questions.reduce((sum, q) => sum + q.maxPoints, 0)}点</span>
+            <span>観点1: {state.questions.filter(q => q.perspective === 1).reduce((sum, q) => sum + q.maxPoints, 0)}点</span>
+            <span>観点2: {state.questions.filter(q => q.perspective === 2).reduce((sum, q) => sum + q.maxPoints, 0)}点</span>
+            <span>観点3: {state.questions.filter(q => q.perspective === 3).reduce((sum, q) => sum + q.maxPoints, 0)}点</span>
+          </div>
         </div>
 
         <div style={{ overflowX: 'auto' }}>

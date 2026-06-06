@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAppContext } from '../store/AppContext';
 import { PDFDocument, rgb } from 'pdf-lib';
+import { get } from 'idb-keyval';
 import ExcelJS from 'exceljs';
 import { Download, FileText, Table } from 'lucide-react';
 import { parseStudentNumbers } from '../utils/studentNumbers';
@@ -16,7 +17,9 @@ const Export = () => {
   const calculateTotalScore = (studentNum: number) => {
     const sc = state.studentScores.find(s => s.studentNumber === studentNum);
     if (!sc) return 0;
-    return Object.values(sc.scores).reduce((sum, scoreData) => sum + (scoreData.points || 0), 0);
+    return state.questions.reduce((sum, q) => {
+      return sum + (sc.scores[q.id]?.points || 0);
+    }, 0);
   };
 
   const calculateAspectScore = (studentNum: number, perspective: number) => {
@@ -33,19 +36,15 @@ const Export = () => {
     setLog(['PDF出力を開始します...']);
     
     try {
-      // Get answer PDF
-      let answerHandle;
-      for await (const [name, handle] of (dirHandle as any).entries()) {
-        if (name === '解答用紙.pdf') answerHandle = handle;
-      }
+      // Get answer PDF from idb-keyval
+      const file = await get<File>('answerPdf');
       
-      if (!answerHandle) {
-        addLog('解答用紙.pdf が見つかりません。');
+      if (!file) {
+        addLog('解答用紙PDFが登録されていません。');
         setIsExportingPdf(false);
         return;
       }
 
-      const file = await (answerHandle as FileSystemFileHandle).getFile();
       const arrayBuffer = await file.arrayBuffer();
       
       const pdfDoc = await PDFDocument.load(arrayBuffer);
@@ -112,8 +111,12 @@ const Export = () => {
             const rect = state.cropSettings.totalScoreRect;
             const x = rect.x / scale;
             const y = height - (rect.y + rect.height) / scale + 5; // Text baseline adjustment
-            const fontSize = (rect.height / scale) * 0.8;
-            page.drawText(`total:${calculateTotalScore(i)}`, { x, y, size: fontSize, color: rgb(0.9, 0.2, 0.2) });
+            const text = `total:${calculateTotalScore(i)}`;
+            const baseFontSize = (rect.height / scale) * 0.8;
+            const estimatedWidth = text.length * baseFontSize * 0.55;
+            const fontSize = estimatedWidth > (rect.width / scale) ? baseFontSize * ((rect.width / scale) / estimatedWidth) : baseFontSize;
+            
+            page.drawText(text, { x, y, size: fontSize, color: rgb(0.9, 0.2, 0.2) });
           }
 
           // Draw Aspect scores at configured rects
@@ -122,9 +125,13 @@ const Export = () => {
             if (rect) {
               const x = rect.x / scale;
               const y = height - (rect.y + rect.height) / scale + 5;
-              const fontSize = (rect.height / scale) * 0.8;
+              const text = `Aspect${aspectId}:${calculateAspectScore(i, parseInt(aspectId))}`;
+              const baseFontSize = (rect.height / scale) * 0.8;
+              const estimatedWidth = text.length * baseFontSize * 0.55;
+              const fontSize = estimatedWidth > (rect.width / scale) ? baseFontSize * ((rect.width / scale) / estimatedWidth) : baseFontSize;
+              
               // ※注意: pdf-libの標準フォントは日本語に対応していないため、「観点」ではなく「Aspect」として印字します。
-              page.drawText(`Aspect${aspectId}:${calculateAspectScore(i, parseInt(aspectId))}`, { x, y, size: fontSize, color: rgb(0.9, 0.2, 0.2) });
+              page.drawText(text, { x, y, size: fontSize, color: rgb(0.9, 0.2, 0.2) });
             }
           }
         }
@@ -143,14 +150,6 @@ const Export = () => {
       
       addLog('採点済み解答用紙.pdf を出力しました。');
       
-      // Also trigger browser download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = '採点済み解答用紙.pdf';
-      a.click();
-      URL.revokeObjectURL(url);
-
     } catch (err) {
       console.error(err);
       addLog(`エラー: ${err}`);
@@ -243,14 +242,6 @@ const Export = () => {
         await writable.write(blob);
         await writable.close();
       }
-
-      // Browser download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = '採点結果.xlsx';
-      a.click();
-      URL.revokeObjectURL(url);
 
       addLog('採点結果.xlsx を出力しました。');
     } catch (err) {
