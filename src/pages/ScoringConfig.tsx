@@ -3,6 +3,18 @@ import { useAppContext } from '../store/AppContext';
 import { QuestionSetting } from '../types';
 import { Trash2, Play } from 'lucide-react';
 import Tesseract from 'tesseract.js';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+async function fileToGenerativePart(file: File) {
+  const base64EncodedDataPromise = new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+    reader.readAsDataURL(file);
+  });
+  return {
+    inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
+  };
+}
 
 const ScoringConfig = () => {
   const { state, saveState, dirHandle } = useAppContext();
@@ -92,8 +104,19 @@ const ScoringConfig = () => {
           const qDir = await trimmedDir.getDirectoryHandle(q.id);
           const templateHandle = await qDir.getFileHandle(`模範解答_${q.number}.jpeg`);
           const file = await templateHandle.getFile();
-          const result = await Tesseract.recognize(file, 'eng+jpn');
-          const templateText = result.data.text.trim().replace(/\s+/g, '');
+          let templateText = '';
+          
+          if (state.settings.geminiApiKey) {
+            const genAI = new GoogleGenerativeAI(state.settings.geminiApiKey);
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const imagePart = await fileToGenerativePart(file);
+            const prompt = "この画像の解答を読み取ってください。問題番号（例: (1)など）や単位（cm, gなど）はすべて除外し、解答となる文字・数字だけを出力してください。余計な説明は含めないでください。";
+            const result = await model.generateContent([prompt, imagePart]);
+            templateText = result.response.text().trim().replace(/\s+/g, '');
+          } else {
+            const result = await Tesseract.recognize(file, 'eng+jpn');
+            templateText = result.data.text.trim().replace(/\s+/g, '');
+          }
           
           const qIndex = newQuestions.findIndex(x => x.id === q.id);
           if (qIndex !== -1) {
@@ -186,15 +209,26 @@ const ScoringConfig = () => {
 
           try {
             const file = await (handle as FileSystemFileHandle).getFile();
-            let result;
-            if (whitelist) {
-              result = await Tesseract.recognize(file, 'eng+jpn', {
-                tessedit_char_whitelist: whitelist
-              } as any);
+            let studentText = '';
+
+            if (state.settings.geminiApiKey) {
+              const genAI = new GoogleGenerativeAI(state.settings.geminiApiKey);
+              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+              const imagePart = await fileToGenerativePart(file);
+              const prompt = "この画像の解答を読み取ってください。問題番号（例: (1)など）や単位（cm, gなど）はすべて除外し、解答となる文字・数字だけを出力してください。読めない場合や空欄の場合は出力なし（空文字）にしてください。余計な説明は含めないでください。";
+              const result = await model.generateContent([prompt, imagePart]);
+              studentText = result.response.text().trim().replace(/\s+/g, '');
             } else {
-              result = await Tesseract.recognize(file, 'eng+jpn');
+              let result;
+              if (whitelist) {
+                result = await Tesseract.recognize(file, 'eng+jpn', {
+                  tessedit_char_whitelist: whitelist
+                } as any);
+              } else {
+                result = await Tesseract.recognize(file, 'eng+jpn');
+              }
+              studentText = result.data.text.trim().replace(/\s+/g, '');
             }
-            const studentText = result.data.text.trim().replace(/\s+/g, '');
             
             // Simple exact match grading (can be improved)
             const isCorrect = templateText && studentText === templateText;
@@ -230,6 +264,23 @@ const ScoringConfig = () => {
   return (
     <div>
       <h2>4. 配点・自動採点設定</h2>
+
+      <div className="card" style={{ marginBottom: '2rem' }}>
+        <h3>高精度OCR (Gemini API) の設定</h3>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+          手書き文字や単位・問題番号の除去を高精度で行うために、Gemini APIを使用できます。APIキーを設定すると、自動採点時に優先して使用されます。
+        </p>
+        <input 
+          type="password"
+          value={state.settings.geminiApiKey || ''}
+          onChange={(e) => saveState({ ...state, settings: { ...state.settings, geminiApiKey: e.target.value } })}
+          placeholder="AIzaSy..."
+          style={{ width: '100%', maxWidth: '400px' }}
+        />
+        <p style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI StudioでAPIキーを取得（無料）</a>
+        </p>
+      </div>
 
       <div className="card" style={{ marginBottom: '2rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>

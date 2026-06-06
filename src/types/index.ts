@@ -4,6 +4,7 @@ export interface AppSettings {
   endNumber: number;
   absentNumbers: number[];
   pagesPerStudent?: number;
+  geminiApiKey?: string;
 }
 
 export interface QuestionSetting {
