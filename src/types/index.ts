@@ -6,6 +6,8 @@ export interface AppSettings {
   pagesPerStudent?: number;
   geminiApiKey?: string;
   geminiModelName?: string;
+  geminiBatchSize?: number;
+  geminiRpmLimit?: number;
 }
 
 export interface QuestionSetting {
